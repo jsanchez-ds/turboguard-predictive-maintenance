@@ -52,6 +52,25 @@ def _read_space_table(path: Path) -> pd.DataFrame:
     return df
 
 
+def _resolve_root(root: str | Path) -> Path:
+    """Resolve `root`, walking up from the current directory if needed.
+
+    Lets notebooks under ``notebooks/`` and scripts under ``scripts/`` use the
+    same default ``data/raw/cmapss`` path without juggling relative roots.
+    """
+    p = Path(root)
+    if p.is_absolute() and p.exists():
+        return p
+    cwd = Path.cwd().resolve()
+    candidates = [cwd, *cwd.parents]
+    for parent in candidates:
+        candidate = parent / p
+        if candidate.exists():
+            return candidate
+    # Nothing matched — return the original (will raise FileNotFoundError on read).
+    return p
+
+
 def load_cmapss(name: str = "FD001", root: str | Path = "data/raw/cmapss") -> CMAPSSData:
     """Load one of the C-MAPSS sub-datasets.
 
@@ -60,11 +79,13 @@ def load_cmapss(name: str = "FD001", root: str | Path = "data/raw/cmapss") -> CM
     name : str
         One of FD001, FD002, FD003, FD004.
     root : str or Path
-        Directory containing the raw .txt files.
+        Directory containing the raw .txt files. Relative paths are resolved
+        against the current directory and its parents (so notebooks under
+        ``notebooks/`` can use the default).
     """
     if name not in DATASETS:
         raise ValueError(f"name must be one of {DATASETS}, got {name!r}")
-    root = Path(root)
+    root = _resolve_root(root)
     train = _read_space_table(root / f"train_{name}.txt")
     test = _read_space_table(root / f"test_{name}.txt")
     rul = pd.read_csv(root / f"RUL_{name}.txt", sep=r"\s+", header=None, engine="python")
