@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "turboguard"
+version = "0.1.0"
+description = "Predictive maintenance & RUL forecasting for industrial heavy equipment — survival models, deep learning RUL, anomaly detection."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Jonathan Sánchez Pesantes", email = "jonathan.sanchez.ep@gmail.com" }]
+keywords = ["predictive-maintenance", "survival-analysis", "rul", "anomaly-detection", "mlops", "mining"]
+classifiers = [
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+  # Core data stack
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "scipy>=1.13",
+  "scikit-learn>=1.5",
+  "statsmodels>=0.14",
+
+  # Time series & signals
+  "sktime>=0.30",
+
+  # Survival analysis
+  "lifelines>=0.28",
+  "scikit-survival>=0.22",
+
+  # Gradient boosting
+  "xgboost>=2.0",
+  "lightgbm>=4.3",
+
+  # Deep learning
+  "torch>=2.3",
+
+  # Anomaly / explainability
+  "shap>=0.45",
+
+  # MLOps
+  "mlflow>=2.14",
+
+  # Demo / serving
+  "streamlit>=1.36",
+  "plotly>=5.22",
+
+  # Utilities
+  "pyyaml>=6.0",
+  "tqdm>=4.66",
+  "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "pytest-cov>=5.0",
+  "ruff>=0.5",
+  "mypy>=1.10",
+  "jupyterlab>=4.2",
+  "ipykernel>=6.29",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]  # line-length handled separately
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
