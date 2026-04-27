@@ -35,34 +35,41 @@ def add_rolling_features(
 ) -> pd.DataFrame:
     """Add per-engine rolling mean/std/min/max/slope features.
 
-    Parameters
-    ----------
-    df : DataFrame
-        Long-format sensor table with one row per (unit_id, cycle).
-    sensor_cols : iterable of str
-        Sensor column names to compute features for.
-    windows : iterable of int
-        Rolling window sizes (in cycles).
-    group_col : str
-        Column identifying each engine.
+    Builds every new column once into a single ``pd.DataFrame`` and then concatenates
+    in a single shot — this avoids the ``PerformanceWarning: DataFrame is highly
+    fragmented`` that fires when each new column is assigned individually.
     """
-    out = df.sort_values([group_col, "cycle"]).copy()
+    sensor_cols = list(sensor_cols)
+    base = df.sort_values([group_col, "cycle"]).reset_index(drop=True)
+
+    new_frames: list[pd.DataFrame] = []
     for w in windows:
-        grouped = out.groupby(group_col, sort=False)[list(sensor_cols)]
+        grouped = base.groupby(group_col, sort=False)[sensor_cols]
         roll = grouped.rolling(window=w, min_periods=1)
-        out[[f"{c}_mean_{w}" for c in sensor_cols]] = roll.mean().reset_index(level=0, drop=True)
-        out[[f"{c}_std_{w}" for c in sensor_cols]] = (
-            roll.std().fillna(0.0).reset_index(level=0, drop=True)
+        mean = roll.mean().reset_index(level=0, drop=True)
+        std = roll.std().fillna(0.0).reset_index(level=0, drop=True)
+        rmin = roll.min().reset_index(level=0, drop=True)
+        rmax = roll.max().reset_index(level=0, drop=True)
+
+        slopes = pd.DataFrame(
+            {
+                f"{c}_slope_{w}": (
+                    base.groupby(group_col, sort=False)[c]
+                    .rolling(window=w, min_periods=2)
+                    .apply(_slope, raw=True)
+                    .reset_index(level=0, drop=True)
+                    .fillna(0.0)
+                    .to_numpy()
+                )
+                for c in sensor_cols
+            },
+            index=base.index,
         )
-        out[[f"{c}_min_{w}" for c in sensor_cols]] = roll.min().reset_index(level=0, drop=True)
-        out[[f"{c}_max_{w}" for c in sensor_cols]] = roll.max().reset_index(level=0, drop=True)
-        # Slope is more expensive — apply per group.
-        for c in sensor_cols:
-            out[f"{c}_slope_{w}"] = (
-                out.groupby(group_col, sort=False)[c]
-                .rolling(window=w, min_periods=2)
-                .apply(_slope, raw=True)
-                .reset_index(level=0, drop=True)
-                .fillna(0.0)
-            )
-    return out
+
+        mean.columns = [f"{c}_mean_{w}" for c in sensor_cols]
+        std.columns = [f"{c}_std_{w}" for c in sensor_cols]
+        rmin.columns = [f"{c}_min_{w}" for c in sensor_cols]
+        rmax.columns = [f"{c}_max_{w}" for c in sensor_cols]
+        new_frames.extend([mean, std, rmin, rmax, slopes])
+
+    return pd.concat([base, *new_frames], axis=1)
