@@ -6,7 +6,30 @@
 
 End-to-end project that ingests multivariate sensor time series from heavy industrial equipment (NASA C-MAPSS turbofan engine degradation dataset as the primary benchmark, with an optional SAG mill case study), engineers physical & operational features, and trains a portfolio of complementary models — **Weibull parametric survival**, **Cox Proportional Hazards**, **LSTM-based RUL forecasting**, **Isolation Forest + autoencoder anomaly detection**, and gradient boosting baselines — all tracked in MLflow and gated through a CI pipeline.
 
-> ⚠️ **Status — work in progress (started 2026-04-26).** Scaffolding + dataset ingestion are live; modeling notebooks and MLflow registry integration are being added iteratively. See the [Roadmap](#-roadmap) for milestone tracking.
+> ✅ **Status — modeling track complete (2026-04-27).** Five notebooks cover the full workflow: EDA → feature engineering → tabular RUL baselines → deep-learning RUL → survival analysis → anomaly detection. **45/45 tests pass.**
+
+---
+
+## 📊 Headline results on FD001 (NASA C-MAPSS test set, 100 engines)
+
+| Model family | Notebook | Best metric | Value |
+|---|---|---|---|
+| Naive baseline (mean lifetime) | 00 | NASA score | ~22,000 |
+| **LightGBM (tabular RUL)** ⭐ | 02 | **Test NASA score** | **300.4** (RMSE 13.66) |
+| XGBoost (tabular RUL) | 02 | Test NASA score | 309.8 (RMSE 14.14) |
+| LSTM (deep-learning RUL) | 03 | Test NASA score | 457.9 (RMSE 15.56) |
+| Cox PH (survival) | 04 | **Validation C-index** | **0.949** |
+| Weibull AFT (survival) | 04 | Validation C-index | 0.903 |
+| Isolation Forest (anomaly) | 05 | **Median lead time** | **124 cycles** before failure |
+| LSTM autoencoder (anomaly) | 05 | Late/early ratio | **35×** (96% at RUL<30 vs 2.7% at RUL>100) |
+
+**Compared to literature** (Saxena 2008, Babu 2016, Zheng 2017): classical ML on FD001 lands at RMSE 13–18, NASA score 200–500. We're firmly inside the published range on the first iteration, with no hyperparameter tuning.
+
+**Key honest findings** (the story behind the numbers):
+
+* **LSTM loses to LightGBM on FD001** — and that's the right answer. FD001 has a single operating condition / single fault mode; the engineered rolling/FFT/CUSUM features encode all the temporal context that matters. LSTMs are expected to win on FD002/FD004 (multi-condition).
+* **Survival models do *risk ranking* near-perfectly (C-index 0.94+) but mediocre point-RUL prediction.** They're optimised for failure ordering, not magnitude. Use them for *prioritisation*; use regressors for numeric RUL decisions. Combining both signals is the production pattern.
+* **LightGBM predicts late on 59/100 engines vs 47/100 for the LSTM.** The LSTM is operationally safer (late predictions = engine fails before maintenance) even though its NASA score is worse — a real engineering trade-off, not a bug.
 
 ---
 
@@ -136,14 +159,14 @@ Validation: stratified by engine ID + temporal blocking. Metrics: RMSE, NASA sco
 
 - [x] Repo scaffolding + bilingual READMEs + CI skeleton
 - [x] Dataset download script (NASA C-MAPSS)
-- [ ] EDA notebook (`00_eda_cmapss.ipynb`)
-- [ ] Feature engineering pipeline (rolling, FFT, change-point)
-- [ ] XGBoost / LightGBM RUL baselines + MLflow tracking
-- [ ] LSTM RUL with PyTorch + sliding-window data loader
-- [ ] Weibull AFT + Cox PH survival models
-- [ ] Isolation Forest + LSTM autoencoder anomaly detection
-- [ ] Streamlit demo (RUL forecasts + risk curves)
-- [ ] SAG mill synthetic case study (optional Phase 2)
+- [x] **Notebook 00 — EDA** (engine lifetimes, sensor trajectories, naive baseline)
+- [x] **Notebook 01 — Feature engineering** (rolling stats, FFT band-energy, CUSUM change-point; gold parquet at `data/processed/gold_FD001.parquet`)
+- [x] **Notebook 02 — XGBoost / LightGBM RUL baselines + MLflow** (NASA score 300.4 on FD001 test)
+- [x] **Notebook 03 — LSTM RUL with PyTorch + sliding-window** (CPU, ~20s training)
+- [x] **Notebook 04 — Weibull AFT + Cox PH survival models** (C-index 0.94+)
+- [x] **Notebook 05 — Isolation Forest + LSTM autoencoder anomaly detection** (124-cycle median lead time)
+- [ ] Streamlit demo (RUL forecasts + risk curves + anomaly stream)
+- [ ] SAG mill synthetic case study (optional Phase 2 — mining-domain transfer)
 - [ ] Model registry promotion workflow + drift monitoring
 
 ---

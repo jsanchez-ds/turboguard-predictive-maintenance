@@ -6,7 +6,30 @@
 
 Proyecto end-to-end que ingiere series temporales multivariadas de sensores de equipos industriales pesados (dataset NASA C-MAPSS de degradación de turbinas como benchmark principal, con un caso de estudio opcional de molino SAG), construye features físicos y operacionales, y entrena un portafolio de modelos complementarios — **Weibull paramétrico**, **Cox PH semi-paramétrico**, **LSTM para pronóstico de RUL**, **Isolation Forest + autoencoder LSTM para anomalías**, y baselines de gradient boosting — todo trackeado en MLflow y validado en un pipeline de CI.
 
-> ⚠️ **Estado — work in progress (iniciado 2026-04-26).** El scaffolding y la ingesta de datos ya están operativos; los notebooks de modelado y la integración con MLflow Registry se incorporan iterativamente. Ver el [Roadmap](#-roadmap) para el seguimiento de hitos.
+> ✅ **Estado — track de modelado completo (2026-04-27).** Cinco notebooks cubren el flujo completo: EDA → feature engineering → baselines tabulares de RUL → RUL con deep learning → análisis de supervivencia → detección de anomalías. **45/45 tests pasan.**
+
+---
+
+## 📊 Resultados principales en FD001 (test set NASA C-MAPSS, 100 turbinas)
+
+| Familia de modelo | Notebook | Mejor métrica | Valor |
+|---|---|---|---|
+| Baseline ingenuo (lifetime promedio) | 00 | NASA score | ~22.000 |
+| **LightGBM (RUL tabular)** ⭐ | 02 | **NASA score test** | **300.4** (RMSE 13.66) |
+| XGBoost (RUL tabular) | 02 | NASA score test | 309.8 (RMSE 14.14) |
+| LSTM (RUL deep learning) | 03 | NASA score test | 457.9 (RMSE 15.56) |
+| Cox PH (supervivencia) | 04 | **C-index validación** | **0.949** |
+| Weibull AFT (supervivencia) | 04 | C-index validación | 0.903 |
+| Isolation Forest (anomalía) | 05 | **Lead time mediano** | **124 ciclos** antes de falla |
+| Autoencoder LSTM (anomalía) | 05 | Ratio late/early | **35×** (96% en RUL<30 vs 2.7% en RUL>100) |
+
+**Comparado con literatura** (Saxena 2008, Babu 2016, Zheng 2017): ML clásico en FD001 reporta RMSE 13–18, NASA score 200–500. Estamos en el rango publicado en la primera iteración, sin hyperparameter tuning.
+
+**Hallazgos honestos clave** (la historia detrás de los números):
+
+* **LSTM pierde contra LightGBM en FD001** — y esa es la respuesta correcta. FD001 tiene una sola condición operacional / un solo modo de falla; las features de rolling/FFT/CUSUM ya encapsulan todo el contexto temporal que importa. Los LSTMs deberían ganar en FD002/FD004 (multi-condición).
+* **Los modelos de supervivencia hacen *ranking de riesgo* casi perfecto (C-index 0.94+) pero predicción de RUL puntual mediocre.** Están optimizados para ordenar fallas, no magnitudes. Úsalos para *priorización*; usa regresores para decisiones numéricas de RUL. Combinar ambas señales es el patrón productivo.
+* **LightGBM predice tarde en 59/100 turbinas vs 47/100 del LSTM.** El LSTM es operacionalmente más seguro (predicción tardía = turbina falla antes del mantenimiento) aunque su NASA score sea peor — un trade-off real de ingeniería, no un bug.
 
 ---
 
@@ -136,14 +159,14 @@ Validación: estratificada por ID de turbina + bloqueo temporal. Métricas: RMSE
 
 - [x] Scaffolding del repo + READMEs bilingües + esqueleto de CI
 - [x] Script de descarga de dataset (NASA C-MAPSS)
-- [ ] Notebook de EDA (`00_eda_cmapss.ipynb`)
-- [ ] Pipeline de feature engineering (rolling, FFT, change-point)
-- [ ] Baselines XGBoost / LightGBM para RUL + tracking MLflow
-- [ ] LSTM RUL con PyTorch + data loader sliding-window
-- [ ] Modelos de supervivencia Weibull AFT + Cox PH
-- [ ] Detección de anomalías Isolation Forest + autoencoder LSTM
-- [ ] Demo Streamlit (RUL + curvas de riesgo)
-- [ ] Caso sintético de molino SAG (Fase 2 opcional)
+- [x] **Notebook 00 — EDA** (lifetimes de turbinas, trayectorias de sensores, baseline ingenuo)
+- [x] **Notebook 01 — Feature engineering** (rolling stats, FFT band-energy, change-point CUSUM; gold parquet en `data/processed/gold_FD001.parquet`)
+- [x] **Notebook 02 — Baselines XGBoost / LightGBM + MLflow** (NASA score 300.4 en FD001 test)
+- [x] **Notebook 03 — LSTM RUL con PyTorch + sliding-window** (CPU, ~20s entrenamiento)
+- [x] **Notebook 04 — Weibull AFT + Cox PH supervivencia** (C-index 0.94+)
+- [x] **Notebook 05 — Isolation Forest + autoencoder LSTM detección de anomalías** (lead time mediano 124 ciclos)
+- [ ] Demo Streamlit (RUL + curvas de riesgo + stream de anomalías)
+- [ ] Caso sintético de molino SAG (Fase 2 opcional — transferencia a dominio minero)
 - [ ] Workflow de promoción en model registry + monitoreo de drift
 
 ---
